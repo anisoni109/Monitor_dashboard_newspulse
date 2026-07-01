@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 
-const RENDER_API = 'https://newspulse-458n.onrender.com/api'
-const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-  ? 'http://localhost:3000/api'
-  : RENDER_API
+const API_BASE = 'https://newspulse-458n.onrender.com/api'
 
 const CATEGORIES = [
   { id: 'all', label: 'All Stories', icon: '📰' },
@@ -332,7 +329,9 @@ export default function App() {
       if (searchQuery) params.set('search', searchQuery)
       if (params.toString()) endpoint += '?' + params.toString()
       const data = await apiFetch(endpoint)
-      setStories(data)
+      // Sort by createdAt DESC (newest first) for consistent display order
+      const sorted = [...data].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      setStories(sorted)
     } catch (e) {} finally { setLoading(false) }
   }, [selectedCategory, searchQuery, user])
 
