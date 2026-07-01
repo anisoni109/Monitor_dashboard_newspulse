@@ -427,6 +427,11 @@ export default function App() {
 
   function logout() { setUser(null); localStorage.removeItem('MONITOR_USER') }
 
+  // If not logged in, show login screen
+  if (!user) {
+    return <LoginScreen onLogin={data => { setUser(data); localStorage.setItem('MONITOR_USER', JSON.stringify(data)) }} />
+  }
+
   return (
     <div className="min-h-screen bg-gray-950">
       {notifications.map(n => <NotificationToast key={n.id} message={n.message} type={n.type} onClose={() => removeNotification(n.id)} />)}
