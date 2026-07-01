@@ -170,34 +170,44 @@ function AISettingsModal({ isOpen, onClose, aiProvider, setAiProvider, ollamaUrl
 }
 
 // ─── Research Chat Modal ───────────────────────────────────────
-function ResearchModal({ isOpen, onClose, aiProvider, ollamaModel, ollamaUrl }) {
+function ResearchModal({ isOpen, onClose, aiProvider, ollamaModel, ollamaUrl, initialQuestion = '' }) {
   const [question, setQuestion] = useState('')
-  const [answer, setAnswer] = useState('')
   const [loading, setLoading] = useState(false)
   const [history, setHistory] = useState([])
 
-  async function askQuestion(e) {
-    e.preventDefault()
-    if (!question.trim()) return
+  // Set the initial question from the parent and auto-trigger askQuestion
+  useEffect(() => {
+    if (isOpen && initialQuestion) {
+      triggerAsk(initialQuestion)
+    }
+  }, [isOpen, initialQuestion])
+
+  async function triggerAsk(qText) {
+    if (!qText.trim()) return
     setLoading(true)
-    setAnswer('')
-    const userQuestion = question
-    setHistory(prev => [...prev, { q: userQuestion, a: '' }])
-    setQuestion('')
+    setHistory(prev => [...prev, { q: qText, a: '' }])
     try {
       const res = await fetch(`${API_BASE}/research/ask`, {
         method: 'POST',
         headers: { 'Authorization': 'Bearer admin123', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: userQuestion, aiProvider, ollamaModel, ollamaUrl })
+        body: JSON.stringify({ question: qText, aiProvider, ollamaModel, ollamaUrl })
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
+      if (!res.ok) throw new Error(data.error || 'Request failed')
       setHistory(prev => prev.map((h, i) => i === prev.length - 1 ? { ...h, a: data.answer } : h))
     } catch (err) {
       setHistory(prev => prev.map((h, i) => i === prev.length - 1 ? { ...h, a: 'Error: ' + err.message } : h))
     } finally {
       setLoading(false)
     }
+  }
+
+  async function askQuestion(e) {
+    e.preventDefault()
+    if (!question.trim()) return
+    const userQuestion = question
+    setQuestion('')
+    await triggerAsk(userQuestion)
   }
 
   if (!isOpen) return null
@@ -289,6 +299,7 @@ export default function App() {
   const [ollamaModel, setOllamaModel] = useState(() => localStorage.getItem('OLLAMA_MODEL') || 'qwen3.5:latest')
   const [showAISettingsModal, setShowAISettingsModal] = useState(false)
   const [showResearchModal, setShowResearchModal] = useState(false)
+  const [researchInitialQuestion, setResearchInitialQuestion] = useState('')
 
   const eventSourceRef = useRef(null)
   const userRef = useRef(user)
@@ -474,7 +485,7 @@ export default function App() {
                 </button>
                 <button onClick={() => setShowUploadForm(true)} className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90 text-xs font-bold">+ Upload Story</button>
                 <button onClick={() => setShowAISettingsModal(true)} className="px-3 py-2 rounded-lg bg-indigo-500/20 text-indigo-400 text-xs font-bold">🤖 {aiProviderLabel}</button>
-                <button onClick={() => setShowResearchModal(true)} className="px-3 py-2 rounded-lg bg-purple-500/20 text-purple-400 text-xs font-bold">🔬 Research</button>
+                <button onClick={() => { setResearchInitialQuestion(''); setShowResearchModal(true); }} className="px-3 py-2 rounded-lg bg-purple-500/20 text-purple-400 text-xs font-bold">🔬 Research</button>
                 {stats && (
                   <span className="hidden sm:flex text-xs gap-1 items-center ml-auto">
                     <span className="px-2 py-1 rounded-lg bg-green-500/20 text-green-400 font-bold">{stats.approvedStories || 0}</span>
@@ -589,10 +600,18 @@ export default function App() {
           <div className="bg-gray-900/50 border border-white/10 rounded-2xl p-6">
             <h2 className="text-lg font-bold text-white mb-4">🔬 AI Research Assistant</h2>
             <p className="text-xs text-gray-400 mb-4">Ask any question and get detailed answers from your Ollama model.</p>
-            <div className="flex gap-2 mb-4">
-              <input type="text" placeholder="Type your question here..." className="flex-1 bg-gray-800/50 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500" onKeyDown={e => { if (e.key === 'Enter') { setShowResearchModal(true); } }} />
-              <button onClick={() => setShowResearchModal(true)} className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold">Ask AI</button>
-            </div>
+            <form onSubmit={e => {
+              e.preventDefault();
+              const input = e.target.elements.researchInput;
+              if (input && input.value.trim()) {
+                setResearchInitialQuestion(input.value);
+                setShowResearchModal(true);
+                input.value = '';
+              }
+            }} className="flex gap-2 mb-4">
+              <input name="researchInput" type="text" placeholder="Type your question here..." className="flex-1 bg-gray-800/50 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500" />
+              <button type="submit" className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold">Ask AI</button>
+            </form>
             <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3">
               <p className="text-[10px] text-blue-300">💡 Uses your configured Ollama model: <strong>{getAIConfigString()}</strong></p>
             </div>
@@ -603,7 +622,7 @@ export default function App() {
       {/* Modals */}
       {showUploadForm && <UploadModal isOpen={showUploadForm} onClose={() => setShowUploadForm(false)} onUpload={handleUpload} />}
       <AISettingsModal isOpen={showAISettingsModal} onClose={() => setShowAISettingsModal(false)} aiProvider={aiProvider} setAiProvider={setAiProvider} ollamaUrl={ollamaUrl} setOllamaUrl={setOllamaUrl} ollamaModel={ollamaModel} setOllamaModel={setOllamaModel} />
-      <ResearchModal isOpen={showResearchModal} onClose={() => setShowResearchModal(false)} aiProvider={aiProvider} ollamaModel={ollamaModel} ollamaUrl={ollamaUrl} />
+      <ResearchModal isOpen={showResearchModal} onClose={() => { setShowResearchModal(false); setResearchInitialQuestion(''); }} aiProvider={aiProvider} ollamaModel={ollamaModel} ollamaUrl={ollamaUrl} initialQuestion={researchInitialQuestion} />
 
       <footer className="border-t border-white/5 mt-12 py-4 text-center">
         <p className="text-[10px] text-gray-600">NewsPulse Monitor v2 • User: {user?.name} • SSE: {sseConnected ? 'connected' : 'disconnected'}</p>
