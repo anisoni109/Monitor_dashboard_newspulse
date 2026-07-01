@@ -4,11 +4,64 @@ let selectedStory = null;
 let enhancedData = null;
 const logs = [];
 
-// Local Storage configurations
-const getApiUrl = () => localStorage.getItem('MONITOR_API_URL') || 'http://localhost:3000/api';
-const setApiUrl = (val) => localStorage.setItem('MONITOR_API_URL', val);
+// API URL configuration - dynamically discovered at startup
+let currentApiUrl = '';
 
-// DOM Elements
+/** Resolve the NewsPulse API base URL. */
+async function resolveApiUrl() {
+  // Priority: localStorage override > server config endpoint > auto-discovery > hardcoded fallback
+  const stored = localStorage.getItem('MONITOR_API_URL');
+  if (stored) return stored;
+
+  try {
+    const res = await fetch('/api/config', { signal: AbortSignal.timeout(3000) });
+    if (res.ok) {
+      const cfg = await res.json();
+      if (cfg.apiUrl) {
+        currentApiUrl = cfg.apiUrl;
+        return cfg.apiUrl;
+      }
+    }
+  } catch (e) {
+    // Server config unavailable — try auto-discovery below
+  }
+
+  // Auto-discover: if the page is served from a Render URL, assume NewsPulse is also at that origin + /api
+  const selfOrigin = window.location.origin;   // e.g. https://newspulse-monitor.onrender.com
+  if (selfOrigin.includes('onrender.com') || !selfOrigin.includes('localhost')) {
+    currentApiUrl = selfOrigin.replace(':3002', ':3000') + '/api';
+    try {
+      // Verify reachability: a short HEAD to the candidate URL
+      await fetch(currentApiUrl, { method: 'HEAD', mode: 'cors' });
+      return currentApiUrl;
+    } catch (_) { /* ignore */ }
+    // If port stripping didn't work, just use same origin with common ports
+    const base = selfOrigin.replace('https://', 'http://').replace(':443', '');
+    for (const p of [3000, 3001]) {
+      const candidate = `${base}:${p}/api`;
+      try { await fetch(candidate, { method: 'HEAD', mode: 'cors' }); return candidate; } catch(_) {}
+    }
+  }
+
+  // Local development fallback (same path logic as the old script)
+  currentApiUrl = 'http://localhost:3000/api';
+  return currentApiUrl;
+}
+
+/** Return the resolved API URL string. */
+const getApiUrl = () => {
+  const stored = localStorage.getItem('MONITOR_API_URL');
+  if (stored) return stored;
+  return currentApiUrl || 'http://localhost:3000/api';
+};
+
+/** Persist a manually-entered override, and update the live variable */
+const setApiUrl = (val) => {
+  localStorage.setItem('MONITOR_API_URL', val);
+  currentApiUrl = val;
+};
+
+// ─── DOM Elements ─────────────────────────────────────
 const newsPulseStatus = document.getElementById('newspulse-status');
 const categorySelector = document.getElementById('category-selector');
 const feedLoading = document.getElementById('feed-loading');
@@ -79,13 +132,13 @@ function logEvent(message, type = 'info') {
 function renderLogs() {
   consoleLogs.innerHTML = '';
   if (logs.length === 0) {
-    consoleLogs.innerHTML = '<div class="log-row info">&gt; Listening for background operations...</div>';
+    consoleLogs.innerHTML = '<div class="log-row info">> Listening for background operations...</div>';
     return;
   }
   logs.forEach(log => {
     const row = document.createElement('div');
     row.className = `log-row ${log.type}`;
-    row.innerHTML = `<span class="log-time">[${escapeHtml(log.timestamp)}]</span> &gt; ${escapeHtml(log.message)}`;
+    row.innerHTML = `<span class="log-time">[${escapeHtml(log.timestamp)}]</span> > ${escapeHtml(log.message)}`;
     consoleLogs.appendChild(row);
   });
 }
@@ -130,12 +183,12 @@ function parseFeedXml(xmlText, sourceName, category) {
   const doc = parser.parseFromString(xmlText, 'text/xml');
   const items = doc.querySelectorAll('item, entry');
   const stories = [];
-  
+
   items.forEach(item => {
     const title = item.querySelector('title')?.textContent?.trim() || '';
     let description = item.querySelector('description, summary, content')?.textContent || '';
-    description = description.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
-    
+    description = description.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&/g, '&').replace(/"/g, '"').replace(/&#39;/g, "'").trim();
+
     let link = item.querySelector('link')?.textContent?.trim() || '';
     if (!link) {
       const linkEl = item.querySelector('link');
@@ -143,13 +196,13 @@ function parseFeedXml(xmlText, sourceName, category) {
         link = linkEl.getAttribute('href') || '';
       }
     }
-    
+
     const pubDate = item.querySelector('pubDate, published, updated')?.textContent || '';
-    
+
     if (title && description.length > 20) {
       const summary = description.length > 280 ? description.substring(0, 280) + '...' : description;
       const cleanLink = link.startsWith('http') ? link : `https://${link}`;
-      
+
       stories.push({
         id: `pending-${btoa(cleanLink).substring(0, 16)}`,
         originalHeadline: title,
@@ -161,7 +214,7 @@ function parseFeedXml(xmlText, sourceName, category) {
       });
     }
   });
-  
+
   return stories;
 }
 
@@ -172,10 +225,10 @@ async function loadPendingStories() {
   feedLoading.classList.remove('hidden');
   feedEmpty.classList.add('hidden');
   closeDetailPanel();
-  
+
   logEvent(`RSS Scan: Fetching channels for "${cat}"`, 'warn');
   pendingStories = [];
-  
+
   const sources = FEED_SOURCES[cat] || FEED_SOURCES['world'];
   for (const source of sources) {
     try {
@@ -188,7 +241,7 @@ async function loadPendingStories() {
   }
 
   feedLoading.classList.add('hidden');
-  
+
   if (pendingStories.length === 0) {
     feedEmpty.classList.remove('hidden');
     return;
@@ -206,7 +259,7 @@ function loadPendingStoriesFromState() {
     feedEmpty.classList.remove('hidden');
     return;
   }
-  
+
   pendingStories.forEach(story => {
     const li = document.createElement('li');
     li.className = 'feed-item';
@@ -227,35 +280,35 @@ function selectArticle(story, element) {
   // Deselect active items
   document.querySelectorAll('.feed-item').forEach(item => item.classList.remove('active'));
   element.classList.add('active');
-  
+
   selectedStory = story;
   enhancedData = null;
-  
+
   // Update view fields
   articleSource.textContent = story.source;
   articleCategory.textContent = story.category;
   articleLink.href = story.link;
   articleTitle.textContent = story.originalHeadline;
   articleDescription.textContent = story.originalSummary;
-  
+
   // Show configurations
   detailEmpty.classList.add('hidden');
   detailContent.classList.remove('hidden');
-  
-  // Hide editor editor section till AI runs
+
+  // Hide editor section till AI runs
   editorSection.classList.add('hidden');
 }
 
 // Run AI Enhancement calling DevToolbox llama worker directly from browser
 async function runAiEnhancement() {
   if (!selectedStory) return;
-  
+
   btnEnhance.disabled = true;
   aiLoading.classList.remove('hidden');
   editorSection.classList.add('hidden');
-  
+
   logEvent(`AI Process: Calling Llama rewriter for "${selectedStory.originalHeadline.substring(0, 30)}..."`, 'warn');
-  
+
   const prompt = `You must rewrite the following news article title and description into a JSON structure.
 IMPORTANT: You must return ONLY a valid JSON object. Do not wrap key names in any way other than standard JSON quotes. Escape any internal double quotes inside the JSON string values (use \\").
 Required JSON format:
@@ -278,11 +331,11 @@ Description: ${selectedStory.originalSummary}`;
       body: JSON.stringify({ prompt }),
       signal: AbortSignal.timeout(20000)
     });
-    
+
     if (!res.ok) throw new Error(`AI service returned HTTP ${res.status}`);
     const data = await res.json();
     if (!data || !data.response) throw new Error('Invalid response structure');
-    
+
     let parsed = null;
     if (typeof data.response === 'object' && data.response !== null) {
       parsed = data.response;
@@ -296,10 +349,10 @@ Description: ${selectedStory.originalSummary}`;
         parsed = JSON.parse(text);
       }
     }
-    
+
     enhancedData = parsed;
     logEvent(`AI Success: Enhancement completed for "${selectedStory.originalHeadline.substring(0, 30)}..."`, 'success');
-    
+
     // Populate form
     inputHeadline.value = parsed.headline || '';
     inputSummary.value = parsed.summary || '';
@@ -308,7 +361,7 @@ Description: ${selectedStory.originalSummary}`;
     inputHindiSummary.value = parsed.hindiSummary || '';
     inputHindiExtended.value = (parsed.hindiExtendedSummary || []).join('\n');
     inputSource.value = selectedStory.source;
-    
+
     aiLoading.classList.add('hidden');
     editorSection.classList.remove('hidden');
     editorSection.scrollIntoView({ behavior: 'smooth' });
@@ -332,7 +385,7 @@ function disapproveStory() {
 async function submitApproval(e) {
   e.preventDefault();
   if (!selectedStory) return;
-  
+
   const payload = {
     id: selectedStory.id,
     headline: inputHeadline.value.trim(),
@@ -347,14 +400,14 @@ async function submitApproval(e) {
     regions: inputRegions.value.split(',').map(r => r.trim()).filter(r => r),
     status: 'approved'
   };
-  
+
   const submitBtn = document.getElementById('btn-approve');
   submitBtn.disabled = true;
   submitBtn.textContent = 'Uploading...';
-  
+
   const apiUrl = getApiUrl();
-  logEvent(`Upload: Posting story to NewsPulse API`, 'warn');
-  
+  logEvent(`Upload: Posting story to NewsPulse API at ${apiUrl}`, 'warn');
+
   try {
     const res = await fetch(`${apiUrl}/stories`, {
       method: 'POST',
@@ -364,7 +417,7 @@ async function submitApproval(e) {
       },
       body: JSON.stringify(payload)
     });
-    
+
     const result = await res.json();
     if (res.ok) {
       logEvent(`Upload Success: Published story successfully (ID: ${selectedStory.id})`, 'success');
@@ -379,7 +432,8 @@ async function submitApproval(e) {
     }
   } catch (err) {
     logEvent(`Upload Error: Connection to NewsPulse server failed (${err.message})`, 'danger');
-    alert('Connection failure to upload: ' + err.message);
+    // Show more helpful context about WHAT URL was tried
+    alert('Connection failure. Tried:\n\n' + apiUrl + '/stories\n\nError: ' + err.message);
   } finally {
     submitBtn.disabled = false;
     submitBtn.innerHTML = '<span>🚀</span> Approve & Upload to NewsPulse';
@@ -395,15 +449,15 @@ async function loadPublishedStories() {
     });
     if (!res.ok) throw new Error('API server rejected request');
     const stories = await res.json();
-    
+
     publishedList.innerHTML = '';
     if (stories.length === 0) {
       publishedEmpty.classList.remove('hidden');
       return;
     }
-    
+
     publishedEmpty.classList.add('hidden');
-    
+
     stories.forEach(story => {
       const tr = document.createElement('tr');
       const up = story.upvotes || 0;
@@ -411,7 +465,7 @@ async function loadPublishedStories() {
       const comments = story.commentsCount || 0;
       const shares = story.shares || 0;
       const serial = story.serialNo ? `#NP-${story.serialNo}` : 'Seed';
-      
+
       tr.innerHTML = `
         <td><span class="np-id-badge">${serial}</span></td>
         <td><span class="source-tag">${escapeHtml(story.category)}</span></td>
@@ -477,10 +531,10 @@ function closeDetailPanel() {
 function escapeHtml(str) {
   if (!str) return '';
   return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+    .replace(/&/g, '&')
+    .replace(/</g, '<')
+    .replace(/>/g, '>')
+    .replace(/"/g, '"')
     .replace(/'/g, '&#039;');
 }
 
@@ -497,25 +551,42 @@ function formatTime(dateStr) {
 // Make handleDeletePublished globally accessible for inline onclick attribute
 window.handleDeletePublished = handleDeletePublished;
 
-// ─── Event Listeners ───────────────────────────────────────────────────
+// ─── Event Listeners ──────────────────────────────────────
 categorySelector.addEventListener('change', loadPendingStories);
 btnEnhance.addEventListener('click', runAiEnhancement);
 btnDisapprove.addEventListener('click', disapproveStory);
 enhanceForm.addEventListener('submit', submitApproval);
 btnRefreshPublished.addEventListener('click', loadPublishedStories);
 
-monitorApiInput.value = getApiUrl();
+// Wire up the API-url input: show whatever URL will be used right now
+(function setInitialApiDisplay() {
+  monitorApiInput.value = getApiUrl();
+})();
+
 monitorApiInput.addEventListener('change', (e) => {
-  setApiUrl(e.target.value);
-  logEvent(`API Base URL updated to: ${e.target.value}`, 'info');
+  const val = e.target.value.trim().replace(/\/+$/, '');     // normalize trailing slashes
+  setApiUrl(val);
+  logEvent(`API Base URL updated to: ${val}`, 'info');
   checkNewsPulseStatus();
   loadPublishedStories();
 });
 
-// Initializations
-logEvent("Static Dashboard Initialized. Running in Browser Mode.");
-checkNewsPulseStatus();
-setInterval(checkNewsPulseStatus, 5000);
-loadPendingStories();
-loadPublishedStories();
-setInterval(loadPublishedStories, 6000);
+// ─── Initialisation ──────────────────────────────────────
+(async function init() {
+  // Discover the real API URL on first load (config > auto-discover > stored > fallback)
+  const apiUrl = await resolveApiUrl();
+  currentApiUrl = apiUrl;
+  monitorApiInput.value = apiUrl;
+
+  if (!apiUrl.includes('localhost')) {
+    logEvent(`Started with remote NewsPulse API: ${apiUrl}`, 'success');
+  } else {
+    logEvent("Local-mode detected — ensure NewsPulse is running on :3000");
+  }
+
+  checkNewsPulseStatus();
+  setInterval(checkNewsPulseStatus, 5000);
+  loadPendingStories();
+  loadPublishedStories();
+  setInterval(loadPublishedStories, 6000);
+})();

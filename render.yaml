@@ -11,5 +11,7 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 3002
       - key: NEWSPULSE_API_URL
         value: https://newspulse-458n.onrender.com/api
