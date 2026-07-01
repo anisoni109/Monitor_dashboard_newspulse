@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NewsPulse - Monitoring Dashboard</title>
+  <link rel="stylesheet" href="index.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="glow-container">
+    <div class="glow-sphere sphere-1"></div>
+    <div class="glow-sphere sphere-2"></div>
+  </div>
+
+  <header>
+    <div class="header-content">
+      <div class="logo">
+        <span class="icon">🛰️</span>
+        <div class="logo-text">
+          <h1>NewsPulse Monitor</h1>
+          <p>Content Acquisition & Verification Station</p>
+        </div>
+      </div>
+      <div class="status-indicators" style="display: flex; gap: 0.75rem; align-items: center;">
+        <input type="text" id="monitor-api-input" placeholder="NewsPulse API Base URL" class="api-url-input" style="background: rgba(255,255,255,0.04); border: 1px solid var(--border-glass); border-radius: 9999px; padding: 0.4rem 1rem; color: #fff; font-size: 0.75rem; font-family: inherit; outline: none; width: 240px; transition: border-color 0.2s;">
+        <div id="newspulse-status" class="status-badge offline">
+          <span class="status-dot"></span>
+          <span class="status-label">NewsPulse Server: Offline</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="dashboard-grid">
+    <!-- Left Sidebar: Feed List -->
+    <section class="panel feed-panel">
+      <div class="panel-header">
+        <h2>Live RSS Feeds</h2>
+        <div class="select-wrapper">
+          <select id="category-selector">
+            <option value="world">🌍 World News</option>
+            <option value="technology">⚡ Technology</option>
+            <option value="business">💼 Business</option>
+            <option value="science">🔬 Science</option>
+            <option value="sports">🏆 Sports</option>
+          </select>
+        </div>
+      </div>
+      <div class="feed-list-container">
+        <div id="feed-loading" class="spinner-container hidden">
+          <div class="spinner"></div>
+          <p>Scanning RSS channels...</p>
+        </div>
+        <div id="feed-empty" class="empty-state">
+          <p>No pending articles found.</p>
+        </div>
+        <ul id="feed-list"></ul>
+      </div>
+    </section>
+
+    <!-- Right Section: Details, AI Enhancement, & Editing -->
+    <section class="panel detail-panel">
+      <div id="detail-empty" class="detail-empty-state">
+        <div class="radar">
+          <div class="radar-line"></div>
+        </div>
+        <h3>Inspection Console Idle</h3>
+        <p>Select a pending article from the live feed to inspect and configure.</p>
+      </div>
+
+      <div id="detail-content" class="detail-content hidden">
+        <!-- Raw Article Source Header -->
+        <div class="source-header">
+          <div class="source-meta">
+            <span id="article-source" class="meta-tag">BBC News</span>
+            <span id="article-category" class="meta-tag category-tag">world</span>
+          </div>
+          <a id="article-link" href="#" target="_blank" class="external-link">
+            Open Original Source ↗
+          </a>
+        </div>
+
+        <div class="article-original">
+          <h2 id="article-title">Original Title</h2>
+          <p id="article-description">Original description body parsed from RSS feed.</p>
+        </div>
+
+        <!-- AI Generator Button -->
+        <div class="action-bar-center">
+          <button id="btn-enhance" class="btn btn-primary btn-glow">
+            <span class="btn-icon">🧠</span>
+            <span class="btn-text">Generate AI Enhancement</span>
+          </button>
+        </div>
+
+        <!-- AI Loading Overlay -->
+        <div id="ai-loading" class="ai-loading-container hidden">
+          <div class="ai-loader">
+            <div class="ai-dots">
+              <span></span><span></span><span></span>
+            </div>
+            <p>Gemini LLM is rewriting, summarizing, and translating text...</p>
+          </div>
+        </div>
+
+        <!-- Enhancement Editor Form -->
+        <div id="editor-section" class="editor-section hidden">
+          <div class="section-title">
+            <h3>⚡ Enhanced Publication Configuration</h3>
+            <p>Edit AI generated content before publishing to NewsPulse</p>
+          </div>
+
+          <form id="enhance-form" class="enhance-form">
+            <!-- English Section -->
+            <div class="form-group-row">
+              <div class="form-column">
+                <div class="lang-heading">🇬🇧 English Version</div>
+                
+                <div class="form-field">
+                  <label for="input-headline">Headline</label>
+                  <input type="text" id="input-headline" required placeholder="Enter English headline">
+                </div>
+
+                <div class="form-field">
+                  <label for="input-summary">Summary (Paragraph)</label>
+                  <textarea id="input-summary" rows="5" required placeholder="Enter 4-5 sentence summary"></textarea>
+                </div>
+
+                <div class="form-field">
+                  <label for="input-extended">Bullet Points (One per line)</label>
+                  <textarea id="input-extended" rows="3" placeholder="Enter key facts"></textarea>
+                </div>
+              </div>
+
+              <!-- Hindi Section -->
+              <div class="form-column">
+                <div class="lang-heading">🇮🇳 Hindi Version</div>
+                
+                <div class="form-field">
+                  <label for="input-hindi-headline">Hindi Headline (शीर्षक)</label>
+                  <input type="text" id="input-hindi-headline" placeholder="हिंदी शीर्षक दर्ज करें">
+                </div>
+
+                <div class="form-field">
+                  <label for="input-hindi-summary">Hindi Summary (सारांश)</label>
+                  <textarea id="input-hindi-summary" rows="5" placeholder="हिंदी सारांश दर्ज करें"></textarea>
+                </div>
+
+                <div class="form-field">
+                  <label for="input-hindi-extended">Hindi Bullet Points (बुलेट पॉइंट्स - प्रति पंक्ति एक)</label>
+                  <textarea id="input-hindi-extended" rows="3" placeholder="हिंदी बुलेट पॉइंट्स दर्ज करें"></textarea>
+                </div>
+              </div>
+            </div>
+
+            <!-- Metadata Section -->
+            <div class="metadata-grid">
+              <div class="form-field">
+                <label for="input-source">Publisher Source</label>
+                <input type="text" id="input-source" required>
+              </div>
+              <div class="form-field">
+                <label for="input-regions">Target Regions (comma-separated)</label>
+                <input type="text" id="input-regions" value="global, in">
+              </div>
+            </div>
+
+            <!-- Publish Actions -->
+            <div class="publish-actions">
+              <button type="button" id="btn-disapprove" class="btn btn-danger">
+                <span>❌</span> Disapprove (Hide)
+              </button>
+              <button type="submit" id="btn-approve" class="btn btn-success">
+                <span>🚀</span> Approve & Upload to NewsPulse
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- Real-time Startup Analytics (Published Stories) -->
+    <section class="panel analytics-panel">
+      <div class="panel-header">
+        <h2>📊 Real-time Startup Analytics (Published Stories)</h2>
+        <button id="btn-refresh-published" class="btn btn-secondary">
+          <span>🔄</span> Refresh Stats
+        </button>
+      </div>
+      <div class="published-container">
+        <div id="published-empty" class="empty-state">
+          <p>No active stories published on NewsPulse yet.</p>
+        </div>
+        <div class="table-wrapper">
+          <table class="analytics-table">
+            <thead>
+              <tr>
+                <th style="width: 10%">ID</th>
+                <th style="width: 12%">Category</th>
+                <th>Headline</th>
+                <th style="width: 35%">Engagement Metrics</th>
+                <th style="width: 8%">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="published-list">
+              <!-- Populated via javascript -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Background Console Logs -->
+    <section class="panel console-panel">
+      <div class="panel-header">
+        <h2>🖥️ Background Developer Console (Live Logs)</h2>
+        <div class="terminal-badge">
+          <span class="status-dot green"></span>
+          <span class="badge-text">SYSTEM ACTIVE</span>
+        </div>
+      </div>
+      <div class="console-box">
+        <div id="console-logs" class="console-content">
+          <div class="log-row info">&gt; System initialized. Awaiting background events...</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

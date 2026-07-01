@@ -1,0 +1,14 @@
+{
+  "name": "newspulse-monitoring-dashboard",
+  "version": "1.0.0",
+  "description": "Standalone monitoring dashboard for RSS feed crawling, AI generation, and NewsPulse cross-connection",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2"
+  }
+}
