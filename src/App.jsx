@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 
-const RENDER_API = 'https://newspulse-api.onrender.com/api'
+const RENDER_API = 'https://newspulse-458n.onrender.com/api'
 const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   ? 'http://localhost:3000/api'
   : RENDER_API
