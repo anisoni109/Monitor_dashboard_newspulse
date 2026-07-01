@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: newspulse-monitor
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEWSPULSE_API_URL
+        value: https://newspulse-458n.onrender.com/api

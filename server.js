@@ -7,8 +7,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 3002;
-const NEWSPULSE_API_URL = 'http://localhost:3000/api';
+const PORT = process.env.PORT || 3002;
+const NEWSPULSE_API_URL = process.env.NEWSPULSE_API_URL || 'http://localhost:3000/api';
 
 // ─── Background Logs Buffer ──────────────────────────────────────────────
 const logs = [];
@@ -307,7 +307,7 @@ app.delete('/api/published/:id', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n📺 Monitoring Dashboard server running on http://localhost:${PORT}`);
   console.log(`🔗 Cross-connecting with NewsPulse API at ${NEWSPULSE_API_URL}\n`);
 });
