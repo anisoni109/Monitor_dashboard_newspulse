@@ -1,20 +1,30 @@
-// Global states
+// ── Global states ────────────────────────────────────────────────
 let pendingStories = [];
 let selectedStory = null;
 let enhancedData = null;
 const logs = [];
 
-// API URL configuration - dynamically discovered at startup
+// ── API URL resolution (works on GitHub Pages + Node server) ─────
 let currentApiUrl = '';
 
-/** Resolve the NewsPulse API base URL. */
+/** Hard-coded API URL injected in index.html */
+const CONFIG_API_URL = window.__MONITOR_CONFIG__?.NEWS_PULSE_API_URL || '';
+
+/** Resolve the NewsPulse API base URL. Priority: localStorage > HTML config > /api/config (if node) > fallback localhost. */
 async function resolveApiUrl() {
-  // Priority: localStorage override > server config endpoint > auto-discovery > hardcoded fallback
+  // 1️⃣ User manually saved a custom URL in this browser
   const stored = localStorage.getItem('MONITOR_API_URL');
   if (stored) return stored;
 
+  // 2️⃣ Hard-coded config injected inside index.html (works on GitHub Pages — no Node required)
+  if (CONFIG_API_URL && CONFIG_API_URL !== '') {
+    currentApiUrl = CONFIG_API_URL;
+    return CONFIG_API_URL;
+  }
+
+  // 3️⃣ Server-side /api/config — only works when served by Express
   try {
-    const res = await fetch('/api/config', { signal: AbortSignal.timeout(3000) });
+    const res = await fetch('/api/config', { signal: AbortSignal.timeout(2000) });
     if (res.ok) {
       const cfg = await res.json();
       if (cfg.apiUrl) {
@@ -22,40 +32,21 @@ async function resolveApiUrl() {
         return cfg.apiUrl;
       }
     }
-  } catch (e) {
-    // Server config unavailable — try auto-discovery below
-  }
+  } catch (_) { /* not available – continue to fallback */ }
 
-  // Auto-discover: if the page is served from a Render URL, assume NewsPulse is also at that origin + /api
-  const selfOrigin = window.location.origin;   // e.g. https://newspulse-monitor.onrender.com
-  if (selfOrigin.includes('onrender.com') || !selfOrigin.includes('localhost')) {
-    currentApiUrl = selfOrigin.replace(':3002', ':3000') + '/api';
-    try {
-      // Verify reachability: a short HEAD to the candidate URL
-      await fetch(currentApiUrl, { method: 'HEAD', mode: 'cors' });
-      return currentApiUrl;
-    } catch (_) { /* ignore */ }
-    // If port stripping didn't work, just use same origin with common ports
-    const base = selfOrigin.replace('https://', 'http://').replace(':443', '');
-    for (const p of [3000, 3001]) {
-      const candidate = `${base}:${p}/api`;
-      try { await fetch(candidate, { method: 'HEAD', mode: 'cors' }); return candidate; } catch(_) {}
-    }
-  }
-
-  // Local development fallback (same path logic as the old script)
+  // 4️⃣ Fallback for local development
   currentApiUrl = 'http://localhost:3000/api';
   return currentApiUrl;
 }
 
-/** Return the resolved API URL string. */
+/** Synchronous — used by all API calls inside submitApproval, loadPublishedStories, etc. */
 const getApiUrl = () => {
   const stored = localStorage.getItem('MONITOR_API_URL');
   if (stored) return stored;
   return currentApiUrl || 'http://localhost:3000/api';
 };
 
-/** Persist a manually-entered override, and update the live variable */
+/** Persist a user override and update the live variable simultaneously. */
 const setApiUrl = (val) => {
   localStorage.setItem('MONITOR_API_URL', val);
   currentApiUrl = val;
@@ -132,7 +123,7 @@ function logEvent(message, type = 'info') {
 function renderLogs() {
   consoleLogs.innerHTML = '';
   if (logs.length === 0) {
-    consoleLogs.innerHTML = '<div class="log-row info">> Listening for background operations...</div>';
+    consoleLogs.innerHTML = '<div class="log-row info">> System initialized. Awaiting background events...</div>';
     return;
   }
   logs.forEach(log => {
@@ -571,15 +562,15 @@ monitorApiInput.addEventListener('change', (e) => {
   loadPublishedStories();
 });
 
-// ─── Initialisation ──────────────────────────────────────
+// ─── Initialisation (async – resolves the correct API URL first) ───
 (async function init() {
-  // Discover the real API URL on first load (config > auto-discover > stored > fallback)
+  // Discover the real API URL on first load
   const apiUrl = await resolveApiUrl();
   currentApiUrl = apiUrl;
   monitorApiInput.value = apiUrl;
 
   if (!apiUrl.includes('localhost')) {
-    logEvent(`Started with remote NewsPulse API: ${apiUrl}`, 'success');
+    logEvent(`Connected to remote NewsPulse API: ${apiUrl}`, 'success');
   } else {
     logEvent("Local-mode detected — ensure NewsPulse is running on :3000");
   }

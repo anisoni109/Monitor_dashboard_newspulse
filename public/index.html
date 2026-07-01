@@ -230,6 +230,13 @@
     </section>
   </main>
 
+  <script>
+    // ── NewsPulse Backend URL (cross-service communication) ──
+    // Update this value to point Monitor Dashboard → your deployed NewsPulse API on Render.
+    window.__MONITOR_CONFIG__ = {
+      NEWS_PULSE_API_URL: 'https://newspulse-458n.onrender.com/api'
+    };
+  </script>
   <script src="app.js"></script>
 </body>
 </html>
